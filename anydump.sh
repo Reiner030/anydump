@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #===================================================================================
 #
 # FILE: dump.sh
@@ -9,15 +9,25 @@
 # BUGS:  ---
 # FIXED: - In 1.0 The parameter -w would not work without -i parameter as multiple tcpdumps are started.
 #        - In 1.1 VLAN's would not be shown if a single interface was dumped.
-#        - In 1.3 Some fixes for virtual interfaces have been provided by Reiner Keller. (Thanks!)
 # NOTES: ---
 #        - 1.2 git initial
 # AUTHOR: Sebastian Haas
+# COMPANY: pharma mall
 # VERSION: 1.2
 # CREATED: 16.09.2014
 # REVISION: 22.09.2014
 #
 #===================================================================================
+
+# capture all interfaces
+if which ip &>/dev/null; then
+	interfaces=( $(ip -br l | awk '{print $1}' | cut -d@ -f1 | sed ':a;N;$!ba;s/\n/ /g' ) )
+elif which ifconfig &>/dev/null; then
+	interfaces=( $( ifconfig | grep '^[a-z0-9]' | awk '{print $1}' | cut -d@ -f1 | sed ':a;N;$!ba;s/\n/ /g' ) )
+else
+	echo "Requires 'ifconfig' or 'ip' to discover interfaces"
+	exit 1
+fi
 
 # When this exits, exit all background processes:
 trap 'kill $(jobs -p) &> /dev/null && sleep 0.2 &&  echo ' EXIT
@@ -26,10 +36,10 @@ trap 'kill $(jobs -p) &> /dev/null && sleep 0.2 &&  echo ' EXIT
 if [[ $@ =~ -i[[:space:]]?[^[:space:]]+ ]]; then
     tcpdump -l $@ | sed 's/^/[Interface:'"${BASH_REMATCH[0]:2}"'] /' &
 else
-    for interface in $(ifconfig | grep '^[a-z0-9]' | awk '{print $1}'i | sed "/:[0-9]/d")
-    do
-       tcpdump -l -i $interface -nn $@ | sed 's/^/[Interface:'"$interface"'] /' 2>/dev/null &
-    done
+    #for interface in $(ifconfig | grep '^[a-z0-9]' | awk '{print $1}')
+	for interface in ${interfaces[@]}; do
+		tcpdump -l -i $interface -nn $@ | sed 's/^/[Interface:'"$interface"']    /' &
+	done
 fi
 # wait .. until CTRL+C
 wait
