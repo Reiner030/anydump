@@ -1,5 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #===================================================================================
+#
+# origin from: https://github.com/samson4649/anydump
 #
 # FILE: dump.sh
 # USAGE: dump.sh [-i interface] [tcpdump-parameters]
@@ -20,12 +22,14 @@
 #===================================================================================
 
 # capture all interfaces
-if which ip &>/dev/null; then
-	interfaces=( $(ip -br l | awk '{print $1}' | cut -d@ -f1 | sed ':a;N;$!ba;s/\n/ /g' ) )
-elif which ifconfig &>/dev/null; then
-	interfaces=( $( ifconfig | grep '^[a-z0-9]' | awk '{print $1}' | cut -d@ -f1 | sed ':a;N;$!ba;s/\n/ /g' ) )
+if tcpdump -D &>/dev/null 2>&1; then
+	interfaces=( $(tcpdump -D | grep -v usb | sed -E 's/^[0-9]+\.([a-zA-Z0-9_]+).*/\1/' | tr '\n' ' ') )
+elif which ip &>/dev/null 2>&1; then
+	interfaces=( $(ip -br l | awk '{print $1}' | cut -d@ -f1 | sed ':a;N;$!ba;s/\n/ /g') )
+elif which ifconfig &>/dev/null 2>&1; then
+	interfaces=( $(ifconfig | grep '^[a-z0-9]' | awk '{print $1}' | cut -d: -f1 | sed ':a;N;$!ba;s/\n/ /g') )
 else
-	echo "Requires 'ifconfig' or 'ip' to discover interfaces"
+	echo "Requires 'tcpdump -D' or 'ifconfig' or 'ip' to discover interfaces"
 	exit 1
 fi
 
@@ -36,10 +40,13 @@ trap 'kill $(jobs -p) &> /dev/null && sleep 0.2 &&  echo ' EXIT
 if [[ $@ =~ -i[[:space:]]?[^[:space:]]+ ]]; then
     tcpdump -l $@ | sed 's/^/[Interface:'"${BASH_REMATCH[0]:2}"'] /' &
 else
-    #for interface in $(ifconfig | grep '^[a-z0-9]' | awk '{print $1}')
+	echo -n "Starting tcpdump onto interfaces:"
 	for interface in ${interfaces[@]}; do
-		tcpdump -l -i $interface -nn $@ | sed 's/^/[Interface:'"$interface"']    /' &
+		#tcpdump -l -i $interface -nn $@ | sed 's/^/[Interface:'"$interface"']    /' &
+		tcpdump -l -i $interface -nne $@ 2>/dev/null | sed -ne '/^$/d; s/^/[Interface:'"$interface"']    /p' &
+		echo -n " $interface"
 	done
+	echo ":"
 fi
 # wait .. until CTRL+C
 wait
